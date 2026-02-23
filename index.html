@@ -16,10 +16,11 @@
         .user { align-self: flex-end; background: var(--user); color: white; border-bottom-right-radius: 5px; }
         .ai { align-self: flex-start; background: var(--ai); color: #333; border-bottom-left-radius: 5px; border: 1px solid #eee; }
         .tag { font-size: 10px; font-weight: bold; margin-bottom: 4px; display: block; opacity: 0.6; text-transform: uppercase; }
-        .input-box { background: white; padding: 10px 15px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 20px)); display: flex; gap: 10px; align-items: center; border-top: 1px solid #ddd; flex-shrink: 0; }
+        .input-box { background: white; padding: 10px 15px; padding-bottom: calc(15px + env(safe-area-inset-bottom)); display: flex; gap: 10px; align-items: center; border-top: 1px solid #ddd; flex-shrink: 0; }
         #text-input { flex: 1; padding: 12px; border-radius: 25px; border: 1px solid #ddd; outline: none; font-size: 16px; background: #f9f9f9; }
-        .btn { background: none; border: none; font-size: 26px; cursor: pointer; }
-        #status { font-size: 12px; color: var(--primary); text-align: center; padding: 5px; display: none; }
+        .btn { background: none; border: none; font-size: 26px; cursor: pointer; border-radius: 50%; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; }
+        #status { font-size: 12px; color: var(--primary); text-align: center; padding: 5px; display: none; font-weight: bold; }
+        .recording { background: #ff3b3033; color: #ff3b30; }
     </style>
 </head>
 <body>
@@ -57,8 +58,13 @@
     const db = getFirestore(app);
     const GEMINI_KEY = "AIzaSyCoXlukAVQWEicxyHhccVol9YQ4PB-XJio";
 
+    const chatDiv = document.getElementById('chat');
+    const input = document.getElementById('text-input');
+    const statusDiv = document.getElementById('status');
+    const voiceBtn = document.getElementById('voice-btn');
+
     async function askAI(prompt) {
-        // След добавяне на карта, това е URL адресът, който трябва да работи перфектно
+        // Стабилен URL
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
         
         try {
@@ -70,21 +76,19 @@
                 })
             });
             const data = await response.json();
+            if (data.error) return `[БЕЛЕЖКА] Все още се активира: ${data.error.message}`;
             return data.candidates[0].content.parts[0].text;
         } catch (e) { 
-            return "[БЕЛЕЖКА] Изчакай 1-2 мин. след добавяне на картата и опитай пак."; 
+            return "[БЕЛЕЖКА] Проблем с връзката."; 
         }
     }
 
-    const chatDiv = document.getElementById('chat');
-    const input = document.getElementById('text-input');
-    const status = document.getElementById('status');
-
-    window.sendMessage = async () => {
-        const text = input.value.trim();
-        if (!text || status.style.display === 'block') return;
+    window.sendMessage = async (manualText = null) => {
+        const text = manualText || input.value.trim();
+        if (!text || statusDiv.style.display === 'block') return;
+        
         input.value = '';
-        status.style.display = 'block';
+        statusDiv.style.display = 'block';
 
         const aiResponse = await askAI(text);
         let category = 'note';
@@ -97,28 +101,64 @@
             category: category,
             timestamp: new Date().getTime()
         });
-        status.style.display = 'none';
+        statusDiv.style.display = 'none';
     }
 
+    // Слушане за промени
     onSnapshot(query(collection(db, "brain_data"), orderBy("timestamp", "asc")), (snap) => {
         chatDiv.innerHTML = '';
         snap.forEach(doc => {
             const d = doc.data();
-            const div = document.createElement('div');
-            div.className = 'msg user';
-            div.innerHTML = `<span class="tag">Ти</span>${d.userText}`;
-            chatDiv.appendChild(div);
-            
-            const aiDiv = document.createElement('div');
-            aiDiv.className = 'msg ai';
+            addMessageUI(d.userText, 'user', 'Ти');
             let label = d.category === 'money' ? "💰 Бюджет" : (d.category === 'todo' ? "✅ Задача" : "📝 Бележка");
-            aiDiv.innerHTML = `<span class="tag">${label}</span>${d.aiText}`;
-            chatDiv.appendChild(aiDiv);
-            chatDiv.scrollTop = chatDiv.scrollHeight;
+            addMessageUI(d.aiText, 'ai', label);
         });
+        chatDiv.scrollTop = chatDiv.scrollHeight;
     });
 
-    document.getElementById('send-btn').onclick = sendMessage;
+    function addMessageUI(text, type, tag) {
+        const div = document.createElement('div');
+        div.className = `msg ${type}`;
+        div.innerHTML = `<span class="tag">${tag}</span>${text}`;
+        chatDiv.appendChild(div);
+    }
+
+    // ГЛАСОВА ПОПРАВКА
+    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (Speech) {
+        const recognition = new Speech();
+        recognition.lang = 'bg-BG';
+        recognition.interimResults = false;
+
+        voiceBtn.onclick = () => {
+            if (voiceBtn.classList.contains('recording')) {
+                recognition.stop();
+            } else {
+                recognition.start();
+                voiceBtn.classList.add('recording');
+                statusDiv.innerText = "Слушам...";
+                statusDiv.style.display = "block";
+            }
+        };
+
+        recognition.onresult = (e) => {
+            const transcript = e.results[0][0].transcript;
+            sendMessage(transcript);
+        };
+
+        recognition.onend = () => {
+            voiceBtn.classList.remove('recording');
+            statusDiv.style.display = "none";
+            statusDiv.innerText = "Асистентът мисли...";
+        };
+
+        recognition.onerror = () => {
+            voiceBtn.classList.remove('recording');
+            alert("Проблем с микрофона. Увери се, че сайтът има разрешение.");
+        };
+    }
+
+    document.getElementById('send-btn').onclick = () => sendMessage();
     input.onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
 </script>
 </body>
