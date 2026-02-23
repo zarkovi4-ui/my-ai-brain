@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Assistant - Second Brain</title>
+    <style>
+        :root { --bg: #f0f2f5; --primary: #007AFF; --text: #1c1e21; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+        /* Горна лента с категории */
+        .header-tabs { display: flex; background: white; padding: 10px; gap: 8px; overflow-x: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .tab { padding: 8px 16px; background: #eee; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer; white-space: nowrap; border: none; }
+        .tab.active { background: var(--primary); color: white; }
+
+        /* Чат зона */
+        #chat-container { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 80%; padding: 12px; border-radius: 18px; font-size: 15px; line-height: 1.4; position: relative; }
+        .user-msg { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 4px; }
+        .ai-msg { align-self: flex-start; background: white; color: var(--text); border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .msg-tag { font-size: 10px; text-transform: uppercase; margin-bottom: 4px; display: block; opacity: 0.7; }
+
+        /* Входна зона */
+        .input-area { background: white; padding: 15px; display: flex; gap: 10px; align-items: center; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
+        #user-input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 25px; outline: none; font-size: 16px; }
+        .action-btn { background: none; border: none; font-size: 24px; cursor: pointer; padding: 5px; }
+        #mic-btn { color: #ea4335; }
+        #send-btn { color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<div class="header-tabs">
+    <button class="tab active" onclick="filter('all')">Всичко</button>
+    <button class="tab" onclick="filter('note')">📝 Бележки</button>
+    <button class="tab" onclick="filter('todo')">✅ Задачи</button>
+    <button class="tab" onclick="filter('money')">💰 Бюджет</button>
+</div>
+
+<div id="chat-container">
+    <div class="msg ai-msg">
+        <span class="msg-tag">Система</span>
+        Здравей! Аз съм твоят втори мозък. Кажи ми какво искаш да запомниш или запиши разход.
+    </div>
+</div>
+
+<div class="input-area">
+    <button class="action-btn" id="mic-btn" onclick="startVoice()">🎙️</button>
+    <input type="text" id="user-input" placeholder="Напиши нещо...">
+    <button class="action-btn" id="send-btn" onclick="sendMessage()">🚀</button>
+</div>
+
+<script type="module">
+    // Тук ще вградим твоя Firebase Config по-късно
+    // За момента оставяме само логиката на интерфейса
+    
+    window.sendMessage = () => {
+        const input = document.getElementById('user-input');
+        if (!input.value) return;
+        
+        addMessage(input.value, 'user');
+        // Тук ще добавим логиката за разпознаване от AI
+        processInput(input.value);
+        
+        input.value = '';
+    };
+
+    window.addMessage = (text, type, tag = "Мисли") => {
+        const container = document.getElementById('chat-container');
+        const div = document.createElement('div');
+        div.className = `msg ${type}-msg`;
+        div.innerHTML = `<span class="msg-tag">${tag}</span>${text}`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    };
+
+    window.processInput = (text) => {
+        // Проста логика за демонстрация, докато свържем AI
+        setTimeout(() => {
+            if (text.includes('лв') || text.includes('пари')) {
+                addMessage("Записах разхода в секция Бюджет. ✅", 'ai', 'Бюджет');
+            } else if (text.includes('купи') || text.includes('напомни')) {
+                addMessage("Добавих го в задачите ти. 🔔", 'ai', 'Напомняне');
+            } else {
+                addMessage("Запомних тази бележка. 📝", 'ai', 'Бележка');
+            }
+        }, 800);
+    };
+
+    // Voice to Data (Speech Recognition)
+    window.startVoice = () => {
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'bg-BG';
+        recognition.start();
+        
+        document.getElementById('mic-btn').style.opacity = '0.3';
+        
+        recognition.onresult = (event) => {
+            const speechToText = event.results[0][0].transcript;
+            document.getElementById('user-input').value = speechToText;
+            document.getElementById('mic-btn').style.opacity = '1';
+            sendMessage();
+        };
+        
+        recognition.onerror = () => {
+            document.getElementById('mic-btn').style.opacity = '1';
+            alert("Грешка при гласовото въвеждане.");
+        };
+    };
+</script>
+
+</body>
+</html>
