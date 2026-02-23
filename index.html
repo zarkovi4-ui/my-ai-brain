@@ -57,33 +57,41 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // --- УЛТРА ЗАЩИТА НА КЛЮЧА ---
-    // Ключът ти е кодиран, за да не го убият роботите на GitHub
-    const m1 = "aGZfRkd2RkxldmxWQ1dqZkNf";
-    const m2 = "ckhIVFdkclJIS2t3b29pdE5CWg==";
-    const FINAL_TOKEN = atob(m1 + m2);
-    // ----------------------------
-
     async function askAI(prompt) {
+        // Проверяваме дали имаме запазен ключ в браузъра
+        let key = localStorage.getItem('hf_key');
+        if (!key) {
+            key = prompt("Моля, постави своя Hugging Face ключ (hf_...):");
+            if (key) {
+                localStorage.setItem('hf_key', key);
+            } else {
+                return "[БЕЛЕЖКА] Трябва да въведеш ключ, за да работи AI.";
+            }
+        }
+
         try {
             const res = await fetch("https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3", {
                 method: "POST",
-                headers: { "Authorization": `Bearer ${FINAL_TOKEN}`, "Content-Type": "application/json" },
+                headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
                 body: JSON.stringify({ 
-                    inputs: `<s>[INST] Ти си асистент на български. Отговори кратко. Започни винаги със [БЕЛЕЖКА], [ЗАДАЧА] или [БЮДЖЕТ]. Потребител: ${prompt} [/INST]`,
-                    parameters: { max_new_tokens: 150, return_full_text: false }
+                    inputs: `<s>[INST] Ти си асистент. Отговори кратко на български. Започни със [БЕЛЕЖКА], [ЗАДАЧА] или [БЮДЖЕТ]: ${prompt} [/INST]`,
+                    parameters: { max_new_tokens: 150 }
                 })
             });
             const data = await res.json();
             
-            if (data.error && data.error.includes("loading")) {
-                return "[БЕЛЕЖКА] AI се събужда... опитай пак след 10 секунди.";
+            if (data.error) {
+                if (data.error.includes("invalid")) {
+                    localStorage.removeItem('hf_key');
+                    return "[БЕЛЕЖКА] Ключът е невалиден. Опресни страницата и въведи нов.";
+                }
+                return "[БЕЛЕЖКА] Сървърът е зает, опитай пак след малко.";
             }
 
-            let reply = data[0].generated_text || "Грешка в модела.";
+            let reply = data[0].generated_text.split('[/INST]')[1] || data[0].generated_text;
             return reply.trim();
-        } catch (e) { 
-            return "[БЕЛЕЖКА] Проблем с AI връзката."; 
+        } catch (e) {
+            return "[БЕЛЕЖКА] Грешка при връзка с AI.";
         }
     }
 
