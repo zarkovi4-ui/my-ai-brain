@@ -7,77 +7,28 @@
     <style>
         :root { --bg: #f4f7f6; --primary: #007AFF; --ai: #ffffff; --user: #007AFF; }
         * { box-sizing: border-box; }
-
-        body { 
-            font-family: -apple-system, system-ui, sans-serif; 
-            background: var(--bg); 
-            margin: 0; 
-            display: flex; 
-            flex-direction: column; 
-            height: 100dvh; 
-            overflow: hidden;
-        }
-        
-        /* Табове за категории */
-        .tabs { 
-            display: flex; 
-            padding: 10px; 
-            gap: 10px; 
-            background: white; 
-            border-bottom: 1px solid #ddd; 
-            overflow-x: auto; 
-            flex-shrink: 0;
-            -webkit-overflow-scrolling: touch;
-        }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+        .tabs { display: flex; padding: 10px; gap: 10px; background: white; border-bottom: 1px solid #ddd; overflow-x: auto; flex-shrink: 0; }
         .tab { padding: 8px 15px; border-radius: 20px; border: 1px solid #ddd; background: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
         .tab.active { background: var(--primary); color: white; border-color: var(--primary); }
-
-        /* Чат зона */
-        #chat { 
-            flex: 1; 
-            overflow-y: auto; 
-            padding: 15px; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 12px; 
-        }
+        #chat { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; }
         .msg { max-width: 85%; padding: 12px 16px; border-radius: 20px; font-size: 15px; line-height: 1.4; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .user { align-self: flex-end; background: var(--user); color: white; border-bottom-right-radius: 5px; }
         .ai { align-self: flex-start; background: var(--ai); color: #333; border-bottom-left-radius: 5px; border: 1px solid #eee; }
         .tag { font-size: 10px; font-weight: bold; margin-bottom: 4px; display: block; opacity: 0.6; text-transform: uppercase; }
-
-        /* Входна зона */
-        .input-box { 
-            background: white; 
-            padding: 10px 15px;
-            padding-bottom: calc(10px + env(safe-area-inset-bottom, 20px)); 
-            display: flex; 
-            gap: 10px; 
-            align-items: center; 
-            border-top: 1px solid #ddd; 
-            flex-shrink: 0;
-        }
-        #text-input { 
-            flex: 1; 
-            padding: 12px; 
-            border-radius: 25px; 
-            border: 1px solid #ddd; 
-            outline: none; 
-            font-size: 16px; 
-            background: #f9f9f9;
-            -webkit-appearance: none;
-        }
-        .btn { background: none; border: none; font-size: 26px; cursor: pointer; padding: 5px; display: flex; align-items: center; justify-content: center; }
-        #status-indicator { font-size: 12px; color: var(--primary); text-align: center; padding: 5px; display: none; background: white; }
+        .input-box { background: white; padding: 10px 15px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 20px)); display: flex; gap: 10px; align-items: center; border-top: 1px solid #ddd; flex-shrink: 0; }
+        #text-input { flex: 1; padding: 12px; border-radius: 25px; border: 1px solid #ddd; outline: none; font-size: 16px; background: #f9f9f9; -webkit-appearance: none; }
+        .btn { background: none; border: none; font-size: 26px; cursor: pointer; padding: 5px; }
+        #status-indicator { font-size: 12px; color: var(--primary); text-align: center; padding: 5px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="tabs">
-    <button class="tab active" data-filter="all">Всичко</button>
-    <button class="tab" data-filter="money">💰 Бюджет</button>
-    <button class="tab" data-filter="todo">✅ Задачи</button>
-    <button class="tab" data-filter="note">📝 Бележки</button>
+    <button class="tab active">Всичко</button>
+    <button class="tab">💰 Бюджет</button>
+    <button class="tab">✅ Задачи</button>
+    <button class="tab">📝 Бележки</button>
 </div>
 
 <div id="chat"></div>
@@ -85,7 +36,7 @@
 
 <div class="input-box">
     <button class="btn" id="voice-btn">🎙️</button>
-    <input type="text" id="text-input" placeholder="Напиши или кажи нещо..." autocomplete="off">
+    <input type="text" id="text-input" placeholder="Напиши нещо..." autocomplete="off">
     <button class="btn" id="send-btn">🚀</button>
 </div>
 
@@ -93,7 +44,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Firebase Config
     const firebaseConfig = {
         apiKey: "AIzaSyDiiJTgYXXjWN_weMlRxfaiYLbEsyfWxqs",
         authDomain: "campscout-aad82.firebaseapp.com",
@@ -111,44 +61,49 @@
     const input = document.getElementById('text-input');
     const status = document.getElementById('status-indicator');
 
-    // Функция за AI - вече използва активирания v1beta модел
     async function askAI(prompt) {
+        // Опитваме с най-универсалния URL адрес за 2026 г.
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
         
-        const systemInstruction = "Ти си интелигентен личен асистент на български. Класифицирай всяко съобщение. ЗАДЪЛЖИТЕЛНО започни отговора си с един от тези етикети: [БЮДЖЕТ], [ЗАДАЧА] или [БЕЛЕЖКА].";
-
         try {
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: systemInstruction + "\nПотребител: " + prompt }] }]
+                    contents: [{ parts: [{ text: "Ти си асистент на български. Започни отговора си със [БЮДЖЕТ], [ЗАДАЧА] или [БЕЛЕЖКА].\nПотребител: " + prompt }] }]
                 })
             });
             
             const data = await response.json();
             
             if (data.error) {
-                console.error("AI Error:", data.error);
-                return `[БЕЛЕЖКА] AI Грешка: ${data.error.message}`;
+                // Ако gemini-1.5-flash не е намерен, пробваме автоматично с gemini-pro
+                console.log("Първият опит не успя, пробвам с алтернативен модел...");
+                const altUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_KEY}`;
+                const altRes = await fetch(altUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: "Здравей!" }] }] })
+                });
+                const altData = await altRes.json();
+                
+                if (altData.error) return "[БЕЛЕЖКА] Грешка: " + data.error.message;
+                return altData.candidates[0].content.parts[0].text;
             }
             
             return data.candidates[0].content.parts[0].text;
         } catch (e) { 
-            return "[БЕЛЕЖКА] Проблем с връзката. Провери интернета."; 
+            return "[БЕЛЕЖКА] Проблем с мрежата."; 
         }
     }
 
-    // Изпращане
     window.sendMessage = async () => {
         const text = input.value.trim();
         if (!text || status.style.display === 'block') return;
-        
         input.value = '';
         status.style.display = 'block';
 
         const aiResponse = await askAI(text);
-        
         let category = 'note';
         if (aiResponse.includes('[БЮДЖЕТ]')) category = 'money';
         else if (aiResponse.includes('[ЗАДАЧА]')) category = 'todo';
@@ -159,12 +114,19 @@
             category: category,
             timestamp: new Date().getTime()
         });
-
         status.style.display = 'none';
-        input.focus();
     }
 
-    // Рендериране на съобщенията
+    onSnapshot(query(collection(db, "brain_data"), orderBy("timestamp", "asc")), (snap) => {
+        chatDiv.innerHTML = '';
+        snap.forEach(doc => {
+            const d = doc.data();
+            addMessageUI(d.userText, 'user', 'Ти');
+            let label = d.category === 'money' ? "💰 Бюджет" : (d.category === 'todo' ? "✅ Задача" : "📝 Бележка");
+            addMessageUI(d.aiText, 'ai', label);
+        });
+    });
+
     function addMessageUI(text, type, tag) {
         const div = document.createElement('div');
         div.className = `msg ${type}`;
@@ -173,39 +135,8 @@
         chatDiv.scrollTop = chatDiv.scrollHeight;
     }
 
-    // Реално време от Firebase
-    onSnapshot(query(collection(db, "brain_data"), orderBy("timestamp", "asc")), (snap) => {
-        chatDiv.innerHTML = '';
-        snap.forEach(doc => {
-            const d = doc.data();
-            addMessageUI(d.userText, 'user', 'Ти');
-            
-            let label = "🤖 Асистент";
-            if(d.category === 'money') label = "💰 Бюджет";
-            else if(d.category === 'todo') label = "✅ Задача";
-            else if(d.category === 'note') label = "📝 Бележка";
-            
-            addMessageUI(d.aiText, 'ai', label);
-        });
-    });
-
-    // Контроли
     document.getElementById('send-btn').onclick = sendMessage;
     input.onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
-
-    // Глас
-    document.getElementById('voice-btn').onclick = () => {
-        const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!Speech) return alert("Браузърът не поддържа глас.");
-        const recognition = new Speech();
-        recognition.lang = 'bg-BG';
-        recognition.start();
-        recognition.onresult = (e) => {
-            input.value = e.results[0][0].transcript;
-            sendMessage();
-        };
-    };
 </script>
-
 </body>
 </html>
