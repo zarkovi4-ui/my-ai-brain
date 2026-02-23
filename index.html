@@ -6,21 +6,47 @@
     <title>AI Second Brain</title>
     <style>
         :root { --bg: #f4f7f6; --primary: #007AFF; --ai: #ffffff; --user: #007AFF; }
-        * { box-sizing: border-box; }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
-        .tabs { display: flex; padding: 10px; gap: 10px; background: white; border-bottom: 1px solid #ddd; overflow-x: auto; flex-shrink: 0; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body { 
+            font-family: -apple-system, system-ui, sans-serif; 
+            background: var(--bg); 
+            margin: 0; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100dvh; 
+            overflow: hidden;
+        }
+        
+        /* Табове */
+        .tabs { 
+            display: flex; padding: 10px; gap: 10px; background: white; 
+            border-bottom: 1px solid #ddd; overflow-x: auto; flex-shrink: 0;
+        }
         .tab { padding: 8px 15px; border-radius: 20px; border: 1px solid #ddd; background: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
         .tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        /* Чат */
         #chat { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; }
-        .msg { max-width: 85%; padding: 12px 16px; border-radius: 20px; font-size: 15px; line-height: 1.4; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .msg { max-width: 85%; padding: 12px 16px; border-radius: 20px; font-size: 15px; line-height: 1.4; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .user { align-self: flex-end; background: var(--user); color: white; border-bottom-right-radius: 5px; }
         .ai { align-self: flex-start; background: var(--ai); color: #333; border-bottom-left-radius: 5px; border: 1px solid #eee; }
         .tag { font-size: 10px; font-weight: bold; margin-bottom: 4px; display: block; opacity: 0.6; text-transform: uppercase; }
-        .input-box { background: white; padding: 10px 15px; padding-bottom: calc(15px + env(safe-area-inset-bottom)); display: flex; gap: 10px; align-items: center; border-top: 1px solid #ddd; flex-shrink: 0; }
+
+        /* Входна зона */
+        .input-box { 
+            background: white; padding: 10px 15px;
+            padding-bottom: calc(10px + env(safe-area-inset-bottom, 15px)); 
+            display: flex; gap: 10px; align-items: center; border-top: 1px solid #ddd; flex-shrink: 0;
+        }
         #text-input { flex: 1; padding: 12px; border-radius: 25px; border: 1px solid #ddd; outline: none; font-size: 16px; background: #f9f9f9; }
-        .btn { background: none; border: none; font-size: 26px; cursor: pointer; border-radius: 50%; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; }
+        
+        .btn { background: none; border: none; font-size: 26px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; transition: 0.2s; }
+        .btn:active { background: #eee; }
+        #voice-btn.recording { background: #ff3b30; color: white; animation: pulse 1.5s infinite; }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         #status { font-size: 12px; color: var(--primary); text-align: center; padding: 5px; display: none; font-weight: bold; }
-        .recording { background: #ff3b3033; color: #ff3b30; }
     </style>
 </head>
 <body>
@@ -37,7 +63,7 @@
 
 <div class="input-box">
     <button class="btn" id="voice-btn">🎙️</button>
-    <input type="text" id="text-input" placeholder="Кажи нещо..." autocomplete="off">
+    <input type="text" id="text-input" placeholder="Пиши или говори..." autocomplete="off">
     <button class="btn" id="send-btn">🚀</button>
 </div>
 
@@ -45,6 +71,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
+    // Firebase Config
     const firebaseConfig = {
         apiKey: "AIzaSyDiiJTgYXXjWN_weMlRxfaiYLbEsyfWxqs",
         authDomain: "campscout-aad82.firebaseapp.com",
@@ -56,15 +83,17 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    const GEMINI_KEY = "AIzaSyCoXlukAVQWEicxyHhccVol9YQ4PB-XJio";
+
+    // ТВОЯТ НОВ API КЛЮЧ
+    const GEMINI_KEY = "AIzaSyDvOuwzUvhNbGlRMRRZysWUAv4gnrZc7E8";
 
     const chatDiv = document.getElementById('chat');
     const input = document.getElementById('text-input');
     const statusDiv = document.getElementById('status');
     const voiceBtn = document.getElementById('voice-btn');
 
+    // Функция за AI
     async function askAI(prompt) {
-        // Стабилен URL
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
         
         try {
@@ -76,21 +105,24 @@
                 })
             });
             const data = await response.json();
-            if (data.error) return `[БЕЛЕЖКА] Все още се активира: ${data.error.message}`;
+            if (data.error) return "[БЕЛЕЖКА] Грешка: " + data.error.message;
             return data.candidates[0].content.parts[0].text;
         } catch (e) { 
             return "[БЕЛЕЖКА] Проблем с връзката."; 
         }
     }
 
+    // Изпращане на съобщение
     window.sendMessage = async (manualText = null) => {
         const text = manualText || input.value.trim();
         if (!text || statusDiv.style.display === 'block') return;
         
         input.value = '';
         statusDiv.style.display = 'block';
+        statusDiv.innerText = "Асистентът мисли...";
 
         const aiResponse = await askAI(text);
+        
         let category = 'note';
         if (aiResponse.includes('[БЮДЖЕТ]')) category = 'money';
         else if (aiResponse.includes('[ЗАДАЧА]')) category = 'todo';
@@ -99,31 +131,29 @@
             userText: text,
             aiText: aiResponse.replace(/\[.*?\]/g, '').trim(),
             category: category,
-            timestamp: new Date().getTime()
+            timestamp: Date.now()
         });
+
         statusDiv.style.display = 'none';
     }
 
-    // Слушане за промени
+    // Показване на съобщенията в реално време
     onSnapshot(query(collection(db, "brain_data"), orderBy("timestamp", "asc")), (snap) => {
         chatDiv.innerHTML = '';
         snap.forEach(doc => {
             const d = doc.data();
-            addMessageUI(d.userText, 'user', 'Ти');
-            let label = d.category === 'money' ? "💰 Бюджет" : (d.category === 'todo' ? "✅ Задача" : "📝 Бележка");
-            addMessageUI(d.aiText, 'ai', label);
+            chatDiv.innerHTML += `<div class="msg user"><span class="tag">Ти</span>${d.userText}</div>`;
+            
+            let label = "📝 Бележка";
+            if(d.category === 'money') label = "💰 Бюджет";
+            if(d.category === 'todo') label = "✅ Задача";
+            
+            chatDiv.innerHTML += `<div class="msg ai"><span class="tag">${label}</span>${d.aiText}</div>`;
         });
         chatDiv.scrollTop = chatDiv.scrollHeight;
     });
 
-    function addMessageUI(text, type, tag) {
-        const div = document.createElement('div');
-        div.className = `msg ${type}`;
-        div.innerHTML = `<span class="tag">${tag}</span>${text}`;
-        chatDiv.appendChild(div);
-    }
-
-    // ГЛАСОВА ПОПРАВКА
+    // ПОПРАВКА ЗА МИКРОФОН
     const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (Speech) {
         const recognition = new Speech();
@@ -134,10 +164,12 @@
             if (voiceBtn.classList.contains('recording')) {
                 recognition.stop();
             } else {
-                recognition.start();
-                voiceBtn.classList.add('recording');
-                statusDiv.innerText = "Слушам...";
-                statusDiv.style.display = "block";
+                try {
+                    recognition.start();
+                    voiceBtn.classList.add('recording');
+                    statusDiv.innerText = "Слушам...";
+                    statusDiv.style.display = "block";
+                } catch (e) { console.log("Вече слушам..."); }
             }
         };
 
@@ -149,12 +181,11 @@
         recognition.onend = () => {
             voiceBtn.classList.remove('recording');
             statusDiv.style.display = "none";
-            statusDiv.innerText = "Асистентът мисли...";
         };
 
-        recognition.onerror = () => {
+        recognition.onerror = (err) => {
             voiceBtn.classList.remove('recording');
-            alert("Проблем с микрофона. Увери се, че сайтът има разрешение.");
+            alert("Грешка микрофон: " + err.error + ". Разрешете достъпа в настройките на браузъра.");
         };
     }
 
