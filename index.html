@@ -7,15 +7,13 @@
     <style>
         :root { --bg: #f4f7f6; --primary: #007AFF; --ai: #ffffff; --user: #007AFF; }
         
-        /* ПОПРАВКА: Използваме 100dvh за мобилни браузъри */
         body { 
             font-family: -apple-system, system-ui, sans-serif; 
             background: var(--bg); 
             margin: 0; 
             display: flex; 
             flex-direction: column; 
-            height: 100vh; 
-            height: 100dvh; 
+            height: 100dvh; /* Dynamic Height за мобилни */
             overflow: hidden;
         }
         
@@ -23,31 +21,29 @@
         .tab { padding: 8px 15px; border-radius: 20px; border: 1px solid #ddd; background: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
         .tab.active { background: var(--primary); color: white; border-color: var(--primary); }
 
-        #chat { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; padding-bottom: 20px; }
-        .msg { max-width: 85%; padding: 12px 16px; border-radius: 20px; font-size: 15px; position: relative; line-height: 1.4; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        #chat { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; }
+        .msg { max-width: 85%; padding: 12px 16px; border-radius: 20px; font-size: 15px; line-height: 1.4; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .user { align-self: flex-end; background: var(--user); color: white; border-bottom-right-radius: 5px; }
         .ai { align-self: flex-start; background: var(--ai); color: #333; border-bottom-left-radius: 5px; }
         .tag { font-size: 10px; font-weight: bold; margin-bottom: 4px; display: block; opacity: 0.6; text-transform: uppercase; }
 
-        /* ПОПРАВКА: По-висока и фиксирана зона за въвеждане */
         .input-box { 
             background: white; 
-            padding: 15px 15px 30px 15px; /* Повече място отдолу за системни ленти */
+            padding: 10px 15px env(safe-area-inset-bottom, 20px) 15px; 
             display: flex; 
             gap: 10px; 
             align-items: center; 
             border-top: 1px solid #ddd; 
             flex-shrink: 0;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
         }
-        #text-input { flex: 1; padding: 12px; border-radius: 25px; border: 1px solid #ddd; outline: none; font-size: 16px; -webkit-appearance: none; }
-        .btn { background: none; border: none; font-size: 24px; cursor: pointer; transition: 0.2s; padding: 5px; }
+        #text-input { flex: 1; padding: 12px; border-radius: 25px; border: 1px solid #ddd; outline: none; font-size: 16px; background: #f9f9f9; }
+        .btn { background: none; border: none; font-size: 26px; cursor: pointer; padding: 5px; }
     </style>
 </head>
 <body>
 
 <div class="tabs">
-    <button class="tab active" onclick="alert('Филтърът ще бъде добавен скоро!')">Всичко</button>
+    <button class="tab active">Всичко</button>
     <button class="tab">💰 Бюджет</button>
     <button class="tab">✅ Задачи</button>
     <button class="tab">📝 Бележки</button>
@@ -82,10 +78,10 @@
     const input = document.getElementById('text-input');
 
     async function askAI(prompt) {
-        // Пробваме с gemini-1.5-flash - най-бързият модел
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
+        // Пробваме с gemini-pro (стабилен модел)
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_KEY}`;
         
-        const systemInstruction = "Ти си асистент на български. Първата дума от отговора ти трябва да е категорията в скоби: [БЮДЖЕТ], [ЗАДАЧА] или [БЕЛЕЖКА].";
+        const systemInstruction = "Ти си личен асистент на български. Класифицирай съобщението: [БЮДЖЕТ] за пари, [ЗАДАЧА] за работа, [БЕЛЕЖКА] за информация. Отговори кратко.";
 
         try {
             const response = await fetch(url, {
@@ -95,38 +91,43 @@
                     contents: [{ parts: [{ text: systemInstruction + "\nПотребител: " + prompt }] }]
                 })
             });
+            
             const data = await response.json();
             
             if (data.error) {
-                console.error("Gemini Error:", data.error);
-                return "[БЕЛЕЖКА] Грешка в ключа или лимита. Провери AI Studio.";
+                return "[БЕЛЕЖКА] AI грешка: " + data.error.message;
             }
             
             return data.candidates[0].content.parts[0].text;
         } catch (e) { 
-            return "[БЕЛЕЖКА] Нямам връзка с AI. Провери интернета."; 
+            return "[БЕЛЕЖКА] Нямам връзка. Провери ключа в AI Studio."; 
         }
     }
 
     window.sendMessage = async () => {
         const text = input.value.trim();
-        if (!text) return;
+        if (!text || text === 'Мисли...') return;
         
+        const oldVal = text;
         input.value = 'Мисли...';
         input.disabled = true;
 
-        const aiResponse = await askAI(text);
+        const aiResponse = await askAI(oldVal);
         
         let category = 'note';
         if (aiResponse.includes('[БЮДЖЕТ]')) category = 'money';
         else if (aiResponse.includes('[ЗАДАЧА]')) category = 'todo';
 
-        await addDoc(collection(db, "brain_data"), {
-            userText: text,
-            aiText: aiResponse.replace(/\[.*?\]/g, '').trim(),
-            category: category,
-            timestamp: new Date().getTime()
-        });
+        try {
+            await addDoc(collection(db, "brain_data"), {
+                userText: oldVal,
+                aiText: aiResponse.replace(/\[.*?\]/g, '').trim(),
+                category: category,
+                timestamp: new Date().getTime()
+            });
+        } catch (err) {
+            console.error("Firebase error:", err);
+        }
 
         input.value = '';
         input.disabled = false;
@@ -160,7 +161,7 @@
     input.onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
 
     document.getElementById('voice-btn').onclick = () => {
-        const recognition = new (window.webkitSpeechRecognition || window.SpeechRecognition)();
+        const recognition = new (window.webkitSpeechRecognition || window.Recognition)();
         recognition.lang = 'bg-BG';
         recognition.start();
         recognition.onresult = (e) => {
