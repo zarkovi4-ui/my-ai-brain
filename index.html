@@ -8,18 +8,37 @@
         :root { --bg: #f4f7f6; --primary: #007AFF; --ai: #ffffff; --user: #007AFF; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+        
+        /* Табове - Запазени */
+        .tabs { display: flex; padding: 10px; gap: 10px; background: white; border-bottom: 1px solid #ddd; overflow-x: auto; flex-shrink: 0; }
+        .tab { padding: 8px 15px; border-radius: 20px; border: 1px solid #ddd; background: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+        
+        /* Чат зона */
         #chat { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 12px; }
-        .msg { max-width: 85%; padding: 12px 16px; border-radius: 20px; font-size: 15px; line-height: 1.4; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .msg { max-width: 85%; padding: 12px 16px; border-radius: 20px; font-size: 15px; line-height: 1.4; box-shadow: 0 2px 5px rgba(0,0,0,0.05); position: relative; }
         .user { align-self: flex-end; background: var(--user); color: white; border-bottom-right-radius: 5px; }
         .ai { align-self: flex-start; background: var(--ai); color: #333; border: 1px solid #eee; border-bottom-left-radius: 5px; }
-        .input-box { background: white; padding: 10px 15px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 15px)); display: flex; gap: 10px; border-top: 1px solid #ddd; }
-        #text-input { flex: 1; padding: 12px; border-radius: 25px; border: 1px solid #ddd; outline: none; font-size: 16px; }
-        .btn { background: none; border: none; font-size: 26px; cursor: pointer; }
+        .tag { font-size: 10px; font-weight: bold; margin-bottom: 4px; display: block; opacity: 0.6; text-transform: uppercase; }
+        
+        /* Входна зона */
+        .input-box { background: white; padding: 10px 15px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 15px)); display: flex; gap: 10px; border-top: 1px solid #ddd; align-items: center; }
+        #text-input { flex: 1; padding: 12px; border-radius: 25px; border: 1px solid #ddd; outline: none; font-size: 16px; background: #f9f9f9; }
+        .btn { background: none; border: none; font-size: 26px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        
         #status { font-size: 12px; color: var(--primary); text-align: center; display: none; padding: 5px; font-weight: bold; }
-        .recording { color: red; transform: scale(1.2); }
+        .recording { color: red; transform: scale(1.2); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
+
+<div class="tabs">
+    <button class="tab active">Всичко</button>
+    <button class="tab">💰 Бюджет</button>
+    <button class="tab">✅ Задачи</button>
+    <button class="tab">📝 Бележки</button>
+</div>
 
 <div id="chat"></div>
 <div id="status">Асистентът мисли...</div>
@@ -30,37 +49,55 @@
     <button class="btn" id="send-btn">🚀</button>
 </div>
 
-<script>
-    const GEMINI_KEY = "AIzaSyDvOuwzUvhNbGlRMRRZysWUAv4gnrZc7E8";
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDiiJTgYXXjWN_weMlRxfaiYLbEsyfWxqs",
+        authDomain: "campscout-aad82.firebaseapp.com",
+        projectId: "campscout-aad82",
+        storageBucket: "campscout-aad82.firebasestorage.app",
+        messagingSenderId: "596374568167",
+        appId: "1:596374568167:web:b248409b57d09c4020f642"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // --- КОНФИГУРАЦИЯ ---
+    const USE_GOOGLE = false; // Смени на true утре, за да тестваш Google пак
+    const GOOGLE_KEY = "AIzaSyDvOuwzUvhNbGlRMRRZysWUAv4gnrZc7E8";
+    const HF_TOKEN = "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";
+    // --------------------
 
     async function askAI(prompt) {
-        // Промяна: Използваме директен модел без суфикси, за да тестваме стабилността
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
-        
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: "Отговаряй кратко на български: " + prompt }] }]
-                })
-            });
-            const data = await response.json();
-            
-            if (data.error) {
-                // Ако v1 даде грешка, автоматично опитваме v1beta като резервен вариант
-                const retryUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
-                const retryRes = await fetch(retryUrl, {
+        if (USE_GOOGLE) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GOOGLE_KEY}`;
+            try {
+                const res = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    body: JSON.stringify({ contents: [{ parts: [{ text: "Ти си асистент. Отговаряй кратко на български. Започни със [БЕЛЕЖКА], [ЗАДАЧА] или [БЮДЖЕТ]: " + prompt }] }] })
                 });
-                const retryData = await retryRes.json();
-                return retryData.candidates[0].content.parts[0].text;
-            }
-            return data.candidates[0].content.parts[0].text;
-        } catch (e) { 
-            return "Грешка при свързване. Моля, опитайте пак."; 
+                const data = await res.json();
+                return data.candidates[0].content.parts[0].text;
+            } catch (e) { return "[БЕЛЕЖКА] Google още не е активен."; }
+        } else {
+            // ПЛАН Б: Hugging Face (Llama-3) - Работи веднага
+            try {
+                const res = await fetch("https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct", {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${HF_TOKEN}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        inputs: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\nТи си асистент на български. Отговаряй кратко. Започвай винаги със [БЕЛЕЖКА], [ЗАДАЧА] или [БЮДЖЕТ].<|eot_id|><|start_header_id|>user<|end_header_id|>\n${prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>`,
+                        parameters: { max_new_tokens: 150 }
+                    })
+                });
+                const data = await res.json();
+                let reply = data[0].generated_text.split('<|start_header_id|>assistant<|end_header_id|>')[1] || data[0].generated_text;
+                return reply.trim();
+            } catch (e) { return "[БЕЛЕЖКА] AI сървърът се рестартира, опитайте след 10 сек."; }
         }
     }
 
@@ -69,50 +106,55 @@
     const statusDiv = document.getElementById('status');
     const voiceBtn = document.getElementById('voice-btn');
 
-    async function sendMessage() {
-        const text = input.value.trim();
+    window.sendMessage = async (manualText = null) => {
+        const text = manualText || input.value.trim();
         if (!text || statusDiv.style.display === 'block') return;
         
-        chatDiv.innerHTML += `<div class="msg user">${text}</div>`;
         input.value = '';
+        statusDiv.innerText = "Асистентът мисли...";
         statusDiv.style.display = 'block';
-        chatDiv.scrollTop = chatDiv.scrollHeight;
 
         const aiResponse = await askAI(text);
-        
+        let category = 'note';
+        if (aiResponse.includes('[БЮДЖЕТ]')) category = 'money';
+        else if (aiResponse.includes('[ЗАДАЧА]')) category = 'todo';
+
+        await addDoc(collection(db, "brain_data"), {
+            userText: text,
+            aiText: aiResponse.replace(/\[.*?\]/g, '').trim(),
+            category: category,
+            timestamp: Date.now()
+        });
         statusDiv.style.display = 'none';
-        chatDiv.innerHTML += `<div class="msg ai">${aiResponse}</div>`;
-        chatDiv.scrollTop = chatDiv.scrollHeight;
     }
 
-    // МИКРОФОН С АВТОМАТИЧНО ИЗПРАЩАНЕ
+    onSnapshot(query(collection(db, "brain_data"), orderBy("timestamp", "asc")), (snap) => {
+        chatDiv.innerHTML = '';
+        snap.forEach(doc => {
+            const d = doc.data();
+            let label = d.category === 'money' ? "💰 БЮДЖЕТ" : (d.category === 'todo' ? "✅ ЗАДАЧА" : "📝 БЕЛЕЖКА");
+            chatDiv.innerHTML += `<div class="msg user"><span class="tag">ТИ</span>${d.userText}</div>`;
+            chatDiv.innerHTML += `<div class="msg ai"><span class="tag">${label}</span>${d.aiText}</div>`;
+        });
+        chatDiv.scrollTop = chatDiv.scrollHeight;
+    });
+
+    // Микрофон с АВТОМАТИЧНО ИЗПРАЩАНЕ
     const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (Speech) {
         const recognition = new Speech();
         recognition.lang = 'bg-BG';
-        recognition.interimResults = false;
-
         voiceBtn.onclick = () => {
-            recognition.start();
-            voiceBtn.classList.add('recording');
-            statusDiv.innerText = "Слушам...";
-            statusDiv.style.display = "block";
+            try { recognition.start(); voiceBtn.classList.add('recording'); } catch(e) {}
         };
-
         recognition.onresult = (e) => {
             const transcript = e.results[0][0].transcript;
-            input.value = transcript;
-            // АВТОМАТИЧНО ИЗПРАЩАНЕ ВЕДНАГА
-            sendMessage();
+            sendMessage(transcript); // Праща веднага
         };
-
-        recognition.onend = () => {
-            voiceBtn.classList.remove('recording');
-            if (statusDiv.innerText === "Слушам...") statusDiv.style.display = "none";
-        };
+        recognition.onend = () => { voiceBtn.classList.remove('recording'); };
     }
 
-    document.getElementById('send-btn').onclick = sendMessage;
+    document.getElementById('send-btn').onclick = () => sendMessage();
     input.onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
 </script>
 </body>
