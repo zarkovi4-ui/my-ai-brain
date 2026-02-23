@@ -121,7 +121,7 @@
 
     // Функция за комуникация с Gemini v1
     async function askAI(prompt) {
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
         
         const systemInstruction = "Ти си интелигентен личен асистент на български. Първата дума от отговора ти ЗАДЪЛЖИТЕЛНО трябва да е една от тези в скоби: [БЮДЖЕТ], [ЗАДАЧА] или [БЕЛЕЖКА]. Ако става въпрос за пари, избери БЮДЖЕТ. Ако е нещо за вършене - ЗАДАЧА. Всичко останало е БЕЛЕЖКА. Отговаряй кратко.";
 
